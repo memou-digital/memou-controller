@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
 import path from 'path';
 import { getGithubConfig } from '@/lib/githubService';
 import { captureTemplateSnapshot } from '@/lib/thumbnailSnapshotService';
@@ -43,8 +44,27 @@ export async function GET(
   try {
     const { owner, repo } = params;
     const forceFresh = req.nextUrl.searchParams.get('fresh') === '1' || req.nextUrl.searchParams.get('refresh') === '1';
+    const cacheKey = `${owner}_${repo}`.toLowerCase();
 
-    // 1. PRIMARY: Try Headless Browser Snapshot (actual rendered template website)
+    // 0. PRIMARY: Instant static serve from public/thumbnails (synced in git & Vercel CDN)
+    if (!forceFresh) {
+      const publicThumb = path.join(process.cwd(), 'public', 'thumbnails', `${cacheKey}.jpg`);
+      if (fs.existsSync(publicThumb)) {
+        try {
+          const buf = await fs.promises.readFile(publicThumb);
+          if (buf && buf.length > 500) {
+            return new NextResponse(new Uint8Array(buf), {
+              headers: {
+                'Content-Type': 'image/jpeg',
+                'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+              },
+            });
+          }
+        } catch {}
+      }
+    }
+
+    // 1. SECONDARY: Try Headless Browser Snapshot (actual rendered template website)
     try {
       const snapshotBuffer = await captureTemplateSnapshot(owner, repo, forceFresh);
       if (snapshotBuffer && snapshotBuffer.length > 0) {
@@ -60,7 +80,7 @@ export async function GET(
     }
 
     // 2. SECONDARY FALLBACK: Check repo assets/images via GitHub Contents API
-    const cacheKey = `${owner}/${repo}`.toLowerCase();
+    const githubRepoKey = `${owner}/${repo}`.toLowerCase();
     const { token } = getGithubConfig();
 
     const headers: Record<string, string> = {
@@ -70,7 +90,7 @@ export async function GET(
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    let targetImagePath = detectedThumbnailPaths.get(cacheKey) || '';
+    let targetImagePath = detectedThumbnailPaths.get(githubRepoKey) || '';
 
     if (!targetImagePath) {
       const listUrl = `https://api.github.com/repos/${owner}/${repo}/contents/assets/images`;
@@ -124,7 +144,7 @@ export async function GET(
     });
 
     if (!rawRes.ok) {
-      detectedThumbnailPaths.delete(cacheKey);
+      detectedThumbnailPaths.delete(githubRepoKey);
       const svg = generateSvgPlaceholder(repo);
       return new NextResponse(svg, {
         headers: {

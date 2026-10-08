@@ -42,9 +42,19 @@ export function getChromiumExecutablePath(): string | null {
 }
 
 export function getCacheDir(): string {
+  const publicDir = path.join(process.cwd(), 'public', 'thumbnails');
+  if (fs.existsSync(publicDir)) {
+    return publicDir;
+  }
   const cacheDir = path.join(process.cwd(), '.cache', 'thumbnails');
   if (!fs.existsSync(cacheDir)) {
-    fs.mkdirSync(cacheDir, { recursive: true });
+    try {
+      fs.mkdirSync(publicDir, { recursive: true });
+      return publicDir;
+    } catch {
+      fs.mkdirSync(cacheDir, { recursive: true });
+      return cacheDir;
+    }
   }
   return cacheDir;
 }
@@ -58,16 +68,19 @@ export async function captureTemplateSnapshot(
   forceFresh = false
 ): Promise<Buffer | null> {
   const cacheKey = `${owner}_${repo}`.toLowerCase();
-  const cacheFile = path.join(getCacheDir(), `${cacheKey}.jpg`);
+  
+  // 1. Check public static directory first (synced with git, ultra-fast & works on Vercel)
+  const publicFile = path.join(process.cwd(), 'public', 'thumbnails', `${cacheKey}.jpg`);
+  const cacheFile = path.join(process.cwd(), '.cache', 'thumbnails', `${cacheKey}.jpg`);
+  const targetFile = fs.existsSync(publicFile) ? publicFile : cacheFile;
 
-  // 1. Check disk cache if not forced
-  if (!forceFresh && fs.existsSync(cacheFile)) {
+  if (!forceFresh && fs.existsSync(targetFile)) {
     try {
-      const stats = await fs.promises.stat(cacheFile);
+      const stats = await fs.promises.stat(targetFile);
       const ageHours = (Date.now() - stats.mtimeMs) / (1000 * 60 * 60);
       // Valid for 7 days
       if (ageHours < 168 && stats.size > 1000) {
-        return await fs.promises.readFile(cacheFile);
+        return await fs.promises.readFile(targetFile);
       }
     } catch {
       // Ignore cache read error and re-generate
@@ -154,7 +167,8 @@ export async function captureTemplateSnapshot(
 
       const buffer = Buffer.from(screenshotBuffer);
 
-      // Save to disk cache asynchronously
+      // Save to public static directory and local cache
+      fs.promises.writeFile(publicFile, buffer).catch(() => {});
       fs.promises.writeFile(cacheFile, buffer).catch((err) => {
         console.warn('Failed to write thumbnail cache:', err);
       });
