@@ -1,0 +1,233 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum PackageTier {
+  BASIC
+  PREMIUM
+  DELUXE
+}
+
+enum OrderStatus {
+  DRAFT
+  CUSTOMIZED
+  DEPLOYING
+  LIVE
+  ARCHIVED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+}
+
+model Template {
+  id           String      @id
+  name         String
+  category     String      // e.g. "birthday", "valentine", "anniversary"
+  packageTier  PackageTier @default(BASIC)
+  githubRepo   String      // e.g. "memou-templates/deluxe-spongebob-movie"
+  description  String?     @db.Text
+  thumbnailUrl String?
+  maxPhotos    Int         @default(3)
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  orders       ClientOrder[]
+
+  @@map("templates")
+}
+
+model ClientOrder {
+  id                   String        @id @default(cuid())
+  orderCode            String        @unique
+  clientName           String
+  clientWhatsapp       String?
+  templateId           String
+  packageTier          PackageTier   @default(BASIC)
+  packagePriceSnapshot Decimal       @default(0) @db.Decimal(15, 2)
+  addonPriceSnapshot   Json?
+  totalAmount          Decimal       @default(0) @db.Decimal(15, 2)
+  paymentStatus        PaymentStatus @default(UNPAID)
+  status               OrderStatus   @default(DRAFT)
+  githubRepoUrl        String?
+  liveUrl              String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  template             Template      @relation(fields: [templateId], references: [id])
+  customization        OrderCustomization?
+  photos               OrderPhoto[]
+  incomeTransaction    IncomeTransaction?
+
+  @@map("client_orders")
+}
+
+model OrderCustomization {
+  id             String      @id @default(cuid())
+  orderId        String      @unique
+  recipientName  String?
+  senderName     String?
+  nickname       String?
+  eventDate      String?
+  pageTitle      String?
+  loveLetter     String?     @db.Text
+  configJson     Json?
+  photoSlotsJson Json?
+  updatedAt      DateTime    @updatedAt
+
+  order          ClientOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_customizations")
+}
+
+model OrderPhoto {
+  id         String      @id @default(cuid())
+  orderId    String
+  slotKey    String      // e.g. "cover", "photo_1", "polaroid_3"
+  fileName   String
+  fileUrl    String
+  fileSizeKb Int?
+  uploadedAt DateTime    @default(now())
+
+  order      ClientOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_photos")
+}
+
+model PricingProduct {
+  id            String    @id @default(uuid()) @db.VarChar(36)
+  code          String    @unique @db.VarChar(50)
+  name          String    @db.VarChar(100)
+  description   String?   @db.Text
+  price         Decimal   @db.Decimal(15, 2)
+  active        Boolean   @default(true)
+  effectiveFrom DateTime  @default(now()) @map("effective_from")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("pricing_products")
+}
+
+model PricingAddon {
+  id            String    @id @default(uuid()) @db.VarChar(36)
+  code          String    @unique @db.VarChar(50)
+  name          String    @db.VarChar(100)
+  description   String?   @db.Text
+  price         Decimal   @db.Decimal(15, 2)
+  active        Boolean   @default(true)
+  effectiveFrom DateTime  @default(now()) @map("effective_from")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("pricing_addons")
+}
+
+enum UserRole {
+  OWNER_ADMIN
+  TEAM_MEMBER
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.VarChar(36)
+  name         String    @db.VarChar(100)
+  email        String    @unique @db.VarChar(191)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  role         UserRole  @default(TEAM_MEMBER)
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
+  lastLoginAt  DateTime? @map("last_login_at")
+
+  createdPayments     PaymentTransaction[]
+  createdIncome       IncomeTransaction[]
+  createdAllocations  AllocationVersion[]
+
+  @@map("users")
+}
+
+enum PaymentType {
+  DP
+  PELUNASAN
+}
+
+enum PaymentMethod {
+  QRIS
+  BANK_TRANSFER
+}
+
+enum TransactionPaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+model PaymentTransaction {
+  id            String                   @id @default(cuid())
+  orderId       String                   @map("order_id")
+  paymentCode   String                   @unique @map("payment_code")
+  paymentType   PaymentType              @map("paymentType")
+  amount        Decimal                  @db.Decimal(15, 2)
+  paymentMethod PaymentMethod            @map("payment_method")
+  paymentStatus TransactionPaymentStatus @default(PENDING) @map("payment_status")
+  paidAt        DateTime?                @map("paid_at")
+  note          String?                  @db.Text
+  createdBy     String?                  @map("created_by") @db.VarChar(36)
+  createdAt     DateTime                 @default(now()) @map("created_at")
+  updatedAt     DateTime                 @default(now()) @updatedAt @map("updated_at")
+
+  creator            User?               @relation(fields: [createdBy], references: [id])
+  incomeTransactions IncomeTransaction[]
+
+  @@map("payment_transactions")
+}
+
+model AllocationVersion {
+  id                String              @id @default(uuid()) @db.VarChar(191)
+  teamPercentage    Decimal             @map("team_percentage") @db.Decimal(5, 2)
+  companyPercentage Decimal             @map("company_percentage") @db.Decimal(5, 2)
+  effectiveFrom     DateTime            @map("effective_from") @db.Date
+  note              String?             @db.Text
+  createdBy         String?             @map("created_by") @db.VarChar(36)
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @default(now()) @updatedAt @map("updated_at")
+
+  creator            User?               @relation(fields: [createdBy], references: [id])
+  incomeTransactions IncomeTransaction[]
+
+  @@map("allocation_versions")
+}
+
+model IncomeTransaction {
+  id                  String                   @id @default(uuid()) @db.VarChar(191)
+  orderId             String                   @unique @map("order_id") @db.VarChar(191)
+  orderCode           String                   @map("order_code") @db.VarChar(100)
+  customerName        String                   @map("customer_name") @db.VarChar(191)
+  productName         String                   @map("product_name") @db.VarChar(191)
+  category            String?                  @default("ORDER") @db.VarChar(100)
+  amount              Decimal                  @db.Decimal(15, 2)
+  paymentMethod       PaymentMethod            @map("payment_method")
+  status              TransactionPaymentStatus @default(PENDING)
+  paymentId           String?                  @map("payment_id") @db.VarChar(191)
+  allocationVersionId String?                  @map("allocation_version_id") @db.VarChar(191)
+  note                String?                  @db.Text
+  transactionDate     DateTime                 @map("transaction_date") @db.Date
+  createdBy           String?                  @map("created_by") @db.VarChar(36)
+  createdAt           DateTime                 @default(now()) @map("created_at")
+  updatedAt           DateTime                 @default(now()) @updatedAt @map("updated_at")
+
+  order             ClientOrder        @relation(fields: [orderId], references: [id])
+  payment           PaymentTransaction? @relation(fields: [paymentId], references: [id])
+  allocationVersion AllocationVersion? @relation(fields: [allocationVersionId], references: [id])
+  creator           User?              @relation(fields: [createdBy], references: [id])
+
+  @@map("income_transactions")
+}
+
