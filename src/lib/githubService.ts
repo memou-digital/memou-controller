@@ -141,7 +141,7 @@ export async function listTemplateRepos(): Promise<{ ok: boolean; repos: GitHubR
           defaultBranch: r.default_branch || 'main',
           topics: r.topics || [],
           packageTier: tier,
-          thumbnailUrl: `/api/github/thumbnail/${r.full_name}?v=live_preview`,
+          thumbnailUrl: `/thumbnails/${r.full_name.replace('/', '_').toLowerCase()}.jpg`,
           updatedAt: r.updated_at,
         };
       });

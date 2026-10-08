@@ -419,8 +419,14 @@ export default function DashboardPage() {
                       >
                         <div className="relative h-48 bg-[#f1f5f9] rounded-[18px] overflow-hidden flex items-center justify-center border border-[#e2e8f0]">
                           <img
-                            src={repo.thumbnailUrl ? (repo.thumbnailUrl.includes('?') ? `${repo.thumbnailUrl}&v=live_preview` : `${repo.thumbnailUrl}?v=live_preview`) : `/api/github/thumbnail/${repo.fullName}?v=live_preview`}
+                            src={repo.thumbnailUrl || `/thumbnails/${repo.fullName.replace('/', '_').toLowerCase()}.jpg`}
                             alt={repo.name}
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              if (!target.src.includes('/api/github/thumbnail')) {
+                                target.src = `/api/github/thumbnail/${repo.fullName}?v=live_preview`;
+                              }
+                            }}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           />
                           <div className="absolute top-3 left-3">
