@@ -13,6 +13,7 @@ export async function middleware(req: NextRequest) {
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/assets') ||
+    pathname.startsWith('/thumbnails') ||
     pathname.startsWith('/fonts') ||
     pathname.startsWith('/favicon.ico') ||
     pathname.startsWith('/api/auth') ||
