@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { repoName, repoFullName, clientName, customSubdomain } = body;
 
-    const vercelToken = process.env.VERCEL_TOKEN || '';
+    const vercelToken = process.env.MEMOU_VERCEL_TOKEN || process.env.VERCEL_TOKEN || '';
     
     // Check if client order has a specified liveUrl with custom subdomain
     let cleanSubdomain = customSubdomain;
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'VERCEL_TOKEN belum diisi di file .env. Pastikan Anda telah memasukkan token Vercel.',
+          error: 'Token Vercel belum diatur. Pastikan MEMOU_VERCEL_TOKEN telah diisi di Environment Variables Vercel atau .env.',
         },
         { status: 400 }
       );
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Resolve Vercel Team ID (from environment or auto-detect from user profile)
-    let teamId = process.env.VERCEL_TEAM_ID;
+    let teamId = process.env.MEMOU_VERCEL_TEAM_ID || process.env.VERCEL_TEAM_ID;
     if (!teamId) {
       try {
         const userRes = await fetch('https://api.vercel.com/v2/user', {

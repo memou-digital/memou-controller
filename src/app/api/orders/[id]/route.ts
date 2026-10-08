@@ -67,8 +67,8 @@ export async function DELETE(
 
     // 3. Delete Vercel project if requested
     if (deleteVercel && repoName) {
-      const vercelToken = process.env.VERCEL_TOKEN;
-      const teamId = process.env.VERCEL_TEAM_ID;
+      const vercelToken = process.env.MEMOU_VERCEL_TOKEN || process.env.VERCEL_TOKEN;
+      const teamId = process.env.MEMOU_VERCEL_TEAM_ID || process.env.VERCEL_TEAM_ID;
       if (vercelToken) {
         try {
           const teamParam = teamId ? `?teamId=${teamId}` : '';
